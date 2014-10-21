@@ -1,5 +1,3 @@
-require_relative "../lib/bunny_service.rb"
-
 RSpec.describe "RPC over AMQP" do
 
   let(:server) {
@@ -31,6 +29,7 @@ RSpec.describe "RPC over AMQP" do
     }
   }
 
+
   before do
     server.listen do |params|
       name = params.fetch("name")
@@ -51,4 +50,5 @@ RSpec.describe "RPC over AMQP" do
       expect(response).to eq({"message" => "Hi peter"})
     end
   end
+
 end

@@ -42,7 +42,7 @@ def start_clients(connection)
     exchange_name: "rpc_test",
   )
   while true
-    c2.call("s2", {duration: "10"})
+    c2.call("s1", {duration: "10"})
   end
 end
 

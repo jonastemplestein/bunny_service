@@ -74,6 +74,9 @@ About concurrency:
 
 http://rubybunny.info/articles/error_handling.html
 
+### Fault tolerance
+
+
 # Further reading
 
 The bunny docs are very well written and worth reading: http://rubybunny.info/articles/guides.html
@@ -87,11 +90,16 @@ The bunny docs are very well written and worth reading: http://rubybunny.info/ar
  - properly handle logging
  - implement timeouts (currently the client waits forever)
  - retry failed services?
- - make sure specs clean up after themselves
+ - make sure specs clean up before/after they run and can't leave garbage lying around that messses with other tests
+ - make sure all rabbitmq structures used for specs are torn down after suite
  - make sure the exchange, channel, queue and message properties are set correctly for our use-case
  - implement `ServiceLoader` or similar that takes a plain service object and sets up the necessary BunnyService::Servers etc
  - talk to RabbitMQ using TLS
  - should we try to implement multi-step services? the first request could enqueue another request with the same correlation id, which would then send the finished result to the waiting service client
+
+ - do we want messages to be persistent or mandatory?
+ - when do we send message acknowledgements
+
 
 # Specs
 Run `guard` (`bundle exec rspec` depending on your setup).
