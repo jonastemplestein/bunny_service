@@ -17,7 +17,7 @@ module BunnyService
       @connection = Bunny.new(rabbit_url).start
       # each service gets it's own channel to allow services in the same
       # process to execute requests concurrently
-      @channel = connection.create_channel
+      @channel = connection.create_channel(nil, 16)
       @exchange = channel.direct(exchange_name)
       @service_name = service_name
       @logger = logger
