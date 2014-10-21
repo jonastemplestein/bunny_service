@@ -20,14 +20,11 @@ gem "bunny_service", path: "../bunny_service"
 ```ruby
 require "bunny_service"
 
-connection = Bunny.new(automatically_recover: false)
-connection.start
-channel = connection.create_channel
-exchange = channel.direct("example") # use a the 'example' direct exchange
+connection = Bunny.new.start
 
 sleep_service = BunnyService::Server.new(
-  channel: channel, 
-  exchange: exchange,
+  connection: connection, 
+  exchange_name: "example",
   service_name: "lazy.sleep",
 )
 
@@ -43,31 +40,36 @@ end
 
 ```ruby
 require "bunny_service"
-connection = Bunny.new(automatically_recover: false)
-connection.start
-channel = connection.create_channel
-exchange = channel.direct("example") # use the same exchange as server
+connection = Bunny.new.start
 
-client = BunnyService::Client.new(channel: channel, exchange: exchange)
+client = BunnyService::Client.new(
+  connection: connection,
+  exchange_name: "example",
+)
 
 # Synchronously calls lazy.sleep service on the 'example' exchange.
 # Should return {message: "Slept for 5 seconds"}
 client.call("lazy.sleep", {duration: 5})
 
-
 ```
 
 # Design
-`client = BunnyService::Client.new(channel:, exchange:)` sets up a service client that you can use to synchronously call services through RabbitMQ. 
+`client = BunnyService::Client.new(connection:, exchange_name:)` sets up a service client that you can use to synchronously call services through RabbitMQ. 
 `exchange` needs to be a direct exchange. Each client instance creates an exclusive queue on the default exchange (TODO: figure out why it has to be on the default exchange) to listen for responses.
 
-`client.call(service_name, payload)` sends a message to `exchange` using `service_name` as the routing key and JSON-encoded payload as the body. For example,  `client.call("test_service.sleep", {duration: "5"})` will send a message with routing key "test_service.sleep" and body {"duration":"5"}. It then blocks and waits for a response message on from the exclusive queue that was set up upon initialization.
+`client.call(service_name, payload)` sends a message to the exchange using `service_name` as the routing key and JSON-encoded payload as the body. For example,  `client.call("test_service.sleep", {duration: "5"})` will send a message with routing key "test_service.sleep" and body {"duration":"5"}. It then blocks and waits for a response message on from the exclusive queue that was set up upon initialization.
 
 Some more notes:
 
   - `payload` in `service_client.call(service_name, payload)` and the response should be hashes
   - You have to run the `BunnyService::Server` first. RabbitMQ discards messages with no matching bindings and `BunnyService::Server` sets up the bindings and queues 
   - The RabbitMQ web interface is super useful for debugging services. You should be able to inspect exchanges, queues, bindings, running consumers, waiting messages (you can dequeue and immediately re-enqueue) and even send requests to the services.
+
+About concurrency:
+
+ - Currently, a server instance can only process one message at a time. You can, however, create multiple server instances within a single process.
+ - Multiple threads can share a single channel to RabbitMQ (it is locked appropriately), but it is recommended to create a channel per thread if you have multiple long-running threads
+ - Each server gets its own channel, otherwise multiple services couldn't concurrently process requests in the same process
 
 # TODO
 

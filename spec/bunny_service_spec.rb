@@ -4,32 +4,24 @@ RSpec.describe "RPC over AMQP" do
 
   let(:server) {
     BunnyService::Server.new(
-      channel: service_channel,
-      exchange: service_exchange,
+      connection: bunny,
+      exchange_name: exchange_name,
       service_name: service_name,
     )
   }
 
   let(:client) {
     BunnyService::Client.new(
-      channel: client_channel,
-      exchange: client_exchange
+      connection: bunny,
+      exchange_name: exchange_name,
     )
   }
 
   let(:bunny) {
-    conn = Bunny.new(:automatically_recover => false)
-    conn.start
-    conn
+    Bunny.new(automatically_recover: false).start
   }
 
   let(:exchange_name) { "rpc_test" }
-
-  let(:client_channel) { bunny.create_channel }
-  let(:client_exchange) { client_channel.direct(exchange_name) }
-
-  let(:service_channel) { bunny.create_channel }
-  let(:service_exchange) { service_channel.direct(exchange_name) }
 
   let(:service_name) { "test.hello_world" }
 

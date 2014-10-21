@@ -4,47 +4,57 @@ require "json"
 
 module BunnyService
   class Client
-    attr_reader :reply_queue
+    attr_reader :reply_queue, :logger, :lock, :condition
     attr_accessor :response, :call_id
-    attr_reader :lock, :condition
 
-    def initialize(channel:, exchange:)
-      @channel = channel
-      @exchange = exchange
+    def initialize(connection:, exchange_name:, logger: Logger.new(STDOUT))
+      @connection = connection
+      @channel = connection.create_channel
+      @exchange = @channel.direct(exchange_name)
+      @logger = logger
 
-      @reply_queue    = @channel.queue("", exclusive: true)
+      @reply_queue = @channel.queue("", exclusive: true)
 
-      @lock      = Mutex.new
+      @lock = Mutex.new
       @condition = ConditionVariable.new
-      that       = self
+      that = self
 
-      puts "[client] initializing client"
+      log "Initializing client"
 
       @reply_queue.subscribe do |delivery_info, properties, payload|
-        puts "[client] received service response: #{payload.inspect}"
-        if properties[:correlation_id] == that.call_id
+        if properties.correlation_id == that.call_id
           that.response = payload
           that.lock.synchronize{that.condition.signal}
         end
       end
-      puts "[client] subscribed to callback queue #{@reply_queue.name}"
+
+      log "Subscribed to exclusive queue #{@reply_queue.name}"
     end
 
     def call(service_name, payload={})
-      self.call_id = BunnyService::Util.generate_uuid
-
-      puts "[client] calling '#{service_name}' service w/ #{payload.inspect}"
-
       raise "Payload has to be a Hash" unless payload.is_a?(Hash)
 
-      @exchange.publish(BunnyService::Util.serialize(payload),
+      self.call_id = BunnyService::Util.generate_uuid
+      payload = BunnyService::Util.serialize(payload)
+      log "[#{call_id}] Calling #{service_name} w/ #{payload})"
+
+      @exchange.publish(
+        payload,
         routing_key: service_name,
         correlation_id: call_id,
         reply_to: @reply_queue.name)
 
       lock.synchronize{condition.wait(lock)}
-      puts "[client] got response '#{response}'"
+      log "[#{call_id}] Got response: #{response}"
       BunnyService::Util.deserialize(response)
+    end
+
+    private
+
+    def log(message, severity=Logger::INFO)
+      logger.add(severity) {
+        "[client #{self.object_id}] #{message}"
+      }
     end
   end
 end
