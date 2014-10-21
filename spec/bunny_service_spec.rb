@@ -4,7 +4,6 @@ RSpec.describe "RPC over AMQP" do
 
   let(:server) {
     BunnyService::Server.new(
-      connection: bunny,
       exchange_name: exchange_name,
       service_name: service_name,
     )
@@ -12,17 +11,11 @@ RSpec.describe "RPC over AMQP" do
 
   let(:client) {
     BunnyService::Client.new(
-      connection: bunny,
       exchange_name: exchange_name,
     )
   }
 
-  let(:bunny) {
-    Bunny.new(automatically_recover: false).start
-  }
-
   let(:exchange_name) { "rpc_test" }
-
   let(:service_name) { "test.hello_world" }
 
   let(:params) {
