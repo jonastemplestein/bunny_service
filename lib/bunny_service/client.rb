@@ -5,22 +5,16 @@ require "json"
 module BunnyService
   class Client
 
-    attr_reader :reply_queue, :logger, :lock, :condition, :connection,
-      :channel, :exchange
+    attr_reader :reply_queue, :lock, :condition, :options
 
     attr_accessor :response, :call_id
 
-    def initialize(rabbit_url: nil, exchange_name:, logger: nil)
-
-      rabbit_url ||= ENV["RABBIT_URL"]
-      logger ||= Logger.new(STDOUT)
-
-      @connection = Bunny.new(rabbit_url).start
-      @channel = connection.create_channel
-      @exchange = channel.direct(exchange_name)
-      @logger = logger
-
-      @reply_queue = channel.queue("", exclusive: true)
+    def initialize(options={})
+      @options = {
+        rabbit_url: ENV["RABBIT_URL"],
+        exchange_name: "amq.direct",
+        logger: Logger.new(STDOUT),
+      }.merge(options)
 
       @lock = Mutex.new
       @condition = ConditionVariable.new
@@ -28,6 +22,8 @@ module BunnyService
 
       log "Initializing client"
 
+      # TODO lazy-initialize that. no need to create a queue if the client
+      # isn't used
       reply_queue.subscribe do |delivery_info, properties, payload|
         if properties.correlation_id == that.call_id
           that.response = payload
@@ -56,10 +52,31 @@ module BunnyService
       BunnyService::Util.deserialize(response)
     end
 
+    def reply_queue
+      @reply_queue ||= channel.queue("", exclusive: true)
+    end
+
+    def connection
+      @connection ||= Bunny.new(options.fetch(:rabbit_url)).start
+    end
+
+    def channel
+      @channel ||= connection.create_channel
+    end
+
+    def exchange
+      @exchange ||= channel.direct(options.fetch(:exchange_name))
+    end
+
+    def teardown
+      log "Tearing down"
+      connection.close
+    end
+
     private
 
     def log(message, severity=Logger::INFO)
-      logger.add(severity) {
+      options.fetch(:logger).add(severity) {
         "[client #{self.object_id}] #{message}"
       }
     end

@@ -6,29 +6,23 @@ module BunnyService
 
   class Server
 
-    attr_reader :logger, :connection, :exchange, :channel, :queue,
-      :service_name
+    attr_reader :options
 
-    def initialize(rabbit_url: nil, exchange_name:, service_name:, logger: nil)
-
-      rabbit_url ||= ENV["RABBIT_URL"]
-      logger ||= Logger.new(STDOUT)
-
-      @connection = Bunny.new(rabbit_url).start
-      # each service gets it's own channel to allow services in the same
-      # process to execute requests concurrently
-      @channel = connection.create_channel(nil, 16)
-      @exchange = channel.direct(exchange_name)
-      @service_name = service_name
-      @logger = logger
+    def initialize(options={})
+      @options = {
+        rabbit_url: ENV["RABBIT_URL"],
+        exchange_name: "amq.direct",
+        logger: Logger.new(STDOUT),
+        thread_pool_size: 2,
+      }.merge(options)
       log "Initialized service"
     end
 
     def listen(&block)
 
-      @queue = channel.queue(service_name).bind(
+      queue.bind(
         exchange,
-        routing_key: service_name
+        routing_key: options.fetch(:service_name)
       )
 
       queue.subscribe do |delivery_info, properties, payload|
@@ -53,11 +47,35 @@ module BunnyService
       self
     end
 
+    def connection
+      @connection ||= Bunny.new(options.fetch(:rabbit_url)).start
+    end
+
+    def channel
+      @channel ||= connection.create_channel(
+        nil,
+        options.fetch(:thread_pool_size)
+      )
+    end
+
+    def exchange
+      @exchange ||= channel.direct(options.fetch(:exchange_name))
+    end
+
+    def queue
+      @queue ||= channel.queue(options.fetch(:service_name))
+    end
+
+    def teardown
+      log "Tearing down"
+      connection.close
+    end
+
     private
 
     def log(message, severity=Logger::INFO)
-      logger.add(severity) {
-        "[#{@service_name} service] #{message}"
+      options.fetch(:logger).add(severity) {
+        "[#{options.fetch(:service_name)} service] #{message}"
       }
     end
   end
