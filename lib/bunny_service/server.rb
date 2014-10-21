@@ -21,7 +21,7 @@ module BunnyService
       puts "[server][#{@service_name} service] initializing server"
 
       @queue.subscribe do |delivery_info, properties, payload|
-        payload = deserialize(payload)
+        payload = BunnyService::Util.deserialize(payload)
 
         response = block.call(payload)
 
@@ -29,21 +29,13 @@ module BunnyService
         puts "[server][#{@service_name} service] response: #{response}"
 
         @channel.default_exchange.publish(
-          serialize(response),
+          BunnyService::Util.serialize(response),
           routing_key: properties.reply_to,
           correlation_id: properties.correlation_id
         )
 
       end
       puts "[server][#{@service_name} service] subscribed to queue"
-    end
-
-    def serialize(data)
-      JSON.dump(data)
-    end
-
-    def deserialize(string)
-      JSON.load(string)
     end
   end
 end

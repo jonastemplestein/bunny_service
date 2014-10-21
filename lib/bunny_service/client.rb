@@ -31,36 +31,20 @@ module BunnyService
     end
 
     def call(service_name, payload={})
-      self.call_id = self.generate_uuid
+      self.call_id = BunnyService::Util.generate_uuid
 
       puts "[client] calling '#{service_name}' service w/ #{payload.inspect}"
 
       raise "Payload has to be a Hash" unless payload.is_a?(Hash)
 
-      @exchange.publish(serialize(payload),
+      @exchange.publish(BunnyService::Util.serialize(payload),
         routing_key: service_name,
         correlation_id: call_id,
         reply_to: @reply_queue.name)
 
       lock.synchronize{condition.wait(lock)}
       puts "[client] got response '#{response}'"
-      deserialize(response)
-    end
-
-    def serialize(data)
-      JSON.dump(data)
-    end
-
-    def deserialize(string)
-      JSON.load(string)
-    end
-
-    protected
-
-    def generate_uuid
-      # very naive but good enough for code
-      # examples
-      "#{rand}#{rand}#{rand}"
+      BunnyService::Util.deserialize(response)
     end
   end
 end
