@@ -13,7 +13,7 @@ module BunnyService
         rabbit_url: ENV["RABBIT_URL"],
         exchange_name: "amq.direct",
         logger: Logger.new(STDOUT),
-        thread_pool_size: 2,
+        consumer_pool_size: 2,
       }.merge(options)
       log "Initialized service"
     end
@@ -58,16 +58,22 @@ module BunnyService
     def channel
       @channel ||= connection.create_channel(
         nil,
-        options.fetch(:thread_pool_size)
+        options.fetch(:consumer_pool_size)
       )
     end
 
     def exchange
-      @exchange ||= channel.direct(options.fetch(:exchange_name))
+      @exchange ||= channel.direct(
+        options.fetch(:exchange_name),
+        durable: true,
+      )
     end
 
     def queue
-      @queue ||= channel.queue(options.fetch(:service_name))
+      @queue ||= channel.queue(
+        options.fetch(:service_name),
+        durable: true
+      )
     end
 
     def teardown

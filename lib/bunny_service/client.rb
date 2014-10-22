@@ -71,7 +71,7 @@ module BunnyService
     def reply_queue
       # TODO for some reason this exclusive queue always needs to be bound
       # to the default exchange. Why?
-      @reply_queue ||= channel.queue("", exclusive: true)
+      @reply_queue ||= channel.temporary_queue
     end
 
     def connection
@@ -83,7 +83,10 @@ module BunnyService
     end
 
     def exchange
-      @exchange ||= channel.direct(options.fetch(:exchange_name))
+      @exchange ||= channel.direct(
+        options.fetch(:exchange_name),
+        durable: true,
+      )
     end
 
     def lock
