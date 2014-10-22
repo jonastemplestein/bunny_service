@@ -21,7 +21,7 @@ RSpec.describe BunnyService::Controller do
 
   describe ".listen" do
     it "handles messages for the action bindings on the given exchange" do
-      Timeout::timeout(2) do
+      Timeout::timeout(5) do
         pid = fork { TestController.listen(exchange_name: exchange_name) }
         at_exit { Process.kill(9, pid) }
 

@@ -41,7 +41,7 @@ describe BunnyService::Server do
       service_name: "concurrent_2",
     ).listen(&counter)
 
-    Timeout::timeout(2) do
+    Timeout::timeout(4) do
       pid = fork do
         #client = BunnyService::Client.new(exchange_name: exchange_name)
         client.call("concurrent_1")
@@ -64,7 +64,7 @@ describe BunnyService::Server do
       service_name: "test_service",
     ).listen &block_until_thread_count(2)
 
-    Timeout::timeout(2) do
+    Timeout::timeout(5) do
 
       pid = fork do
         client = BunnyService::Client.new(exchange_name: exchange_name)
