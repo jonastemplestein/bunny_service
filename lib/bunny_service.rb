@@ -1,6 +1,7 @@
 # dependencies
 require "bunny_service/server"
 require "bunny_service/client"
+require "bunny_service/controller"
 require "bunny_service/util"
 
 module BunnyService
