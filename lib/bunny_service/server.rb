@@ -35,13 +35,17 @@ module BunnyService
 
         response = block.call(payload)
 
-        log "Publishing response #{response.inspect} on queue #{reply_queue}"
+        if reply_queue
+          log "Publishing response #{response.inspect} on queue #{reply_queue}"
 
-        channel.default_exchange.publish(
-          BunnyService::Util.serialize(response),
-          routing_key: reply_queue, # default_exchange is a direct exchange
-          correlation_id: request_id,
-        )
+          channel.default_exchange.publish(
+            BunnyService::Util.serialize(response),
+            routing_key: reply_queue, # default_exchange is a direct exchange
+            correlation_id: request_id,
+          )
+        else
+          log "Not publishing response #{response.inspect} because there is no reply queue"
+        end
       end
       log "Subscribed to queue"
       self

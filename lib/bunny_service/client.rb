@@ -5,9 +5,10 @@ require "json"
 module BunnyService
   class Client
 
-    attr_reader :reply_queue, :lock, :condition, :options
+    attr_reader :options
 
-    attr_accessor :response, :call_id
+    # Used to pass data between main thread and networking thread
+    attr_accessor :response, :request_id
 
     def initialize(options={})
       @options = {
@@ -16,43 +17,60 @@ module BunnyService
         logger: Logger.new(STDOUT),
       }.merge(options)
 
-      @lock = Mutex.new
-      @condition = ConditionVariable.new
-      that = self
-
       log "Initializing client"
 
-      # TODO lazy-initialize that. no need to create a queue if the client
-      # isn't used
+      # Each client creates one exclusive queue for responses. At each time,
+      # just one call can be in-flight per client.
       reply_queue.subscribe do |delivery_info, properties, payload|
-        if properties.correlation_id == that.call_id
-          that.response = payload
-          that.lock.synchronize{that.condition.signal}
+        # This code is executed in the networking thread. If this is a
+        # reponse to the currently in-flight request, we store the result and
+        # signal the main thread.
+        if properties.correlation_id == request_id
+          self.response = payload
+          lock.synchronize { condition.signal }
+        else
+          # TODO once we implement timeouts, this might happen frequently
+          raise "Received errand correlation id #{properties.correlation_id}" +
+            "on queue #{reply_queue.name} (expecting #{request_id})"
         end
       end
 
       log "Subscribed to exclusive queue #{reply_queue.name}"
     end
 
+    # Publishes a service request on the exchange. For example:
+    # service_client.call("lazy.sleep", {duration: 5})
     def call(service_name, payload={})
       raise "Payload has to be a Hash" unless payload.is_a?(Hash)
 
-      self.call_id = BunnyService::Util.generate_uuid
+      self.request_id = BunnyService::Util.generate_uuid
       payload = BunnyService::Util.serialize(payload)
-      log "[#{call_id}] Calling #{service_name} w/ #{payload})"
+      log "[#{request_id}] Calling #{service_name} w/ #{payload})"
 
       exchange.publish(
         payload,
         routing_key: service_name,
-        correlation_id: call_id,
+        correlation_id: request_id,
         reply_to: reply_queue.name)
 
-      lock.synchronize{condition.wait(lock)}
-      log "[#{call_id}] Got response: #{response}"
-      BunnyService::Util.deserialize(response)
+      # The response will be asynchronously received in bunny's networking
+      # thread. In the main thread we wait for the networking thread to
+      # signal that the response was received
+      # TODO what about a timeout?
+      lock.synchronize { condition.wait(lock) }
+
+      log "[#{request_id}] Got response: #{response}"
+      deserialized_response = BunnyService::Util.deserialize(response)
+
+      self.request_id = nil
+      self.response = nil
+
+      deserialized_response
     end
 
     def reply_queue
+      # TODO for some reason this exclusive queue always needs to be bound
+      # to the default exchange. Why?
       @reply_queue ||= channel.queue("", exclusive: true)
     end
 
@@ -66,6 +84,14 @@ module BunnyService
 
     def exchange
       @exchange ||= channel.direct(options.fetch(:exchange_name))
+    end
+
+    def lock
+      @lock ||= Mutex.new
+    end
+
+    def condition
+      @condition ||= ConditionVariable.new
     end
 
     def teardown

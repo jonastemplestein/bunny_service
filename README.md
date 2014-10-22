@@ -62,13 +62,14 @@ Some more notes:
 
 About concurrency:
 
- - Bunny channels must not be shared between threads. That leads to non-deterministic mayhem (see http://rubybunny.info/articles/concurrency.html for an explanation)
+ - Clients can not be used simultaneously in different threads. Bunny channels must not be shared between threads. That leads to non-deterministic mayhem (see http://rubybunny.info/articles/concurrency.html for an explanation)
 
  - Each client/server creates its own connection (`Bunny::Session`). Each of those connections forks a networking thread. For details see http://rubybunny.info/articles/connecting.html
 
- - Each bunny connection (`Bunny::Session`) creates a separate networking IO thread
+ - Each server channel has a threadpool, the size of which determines the number of concurrent requests a single server process can respond to. The client subscription doesn't has a threadpool because it only ever needs to process one message
 
- - Each server channel has a threadpool, the size of which determines the number of concurrent requests a single server process can respond to
+- Subscription callbacks get executed in the connection's networking thread
+
 
 # Exception handling
 
@@ -81,9 +82,9 @@ http://rubybunny.info/articles/error_handling.html
 
 The bunny docs are very well written and worth reading: http://rubybunny.info/articles/guides.html
 
-# TODO
+# TODO / open questions
 
- - do we care about message order?
+ - is there a way to cancel queued-up messages? should there be?
  - why do we have to send the callback messages to an exclusive queue on the _default exchange_?
  - how do we manage our services? queues and bindings need to be set up, perhaps we want to broadcast other service properties such as retry policies, as well
  - handle exceptions properly
@@ -96,9 +97,10 @@ The bunny docs are very well written and worth reading: http://rubybunny.info/ar
  - implement `ServiceLoader` or similar that takes a plain service object and sets up the necessary BunnyService::Servers etc
  - talk to RabbitMQ using TLS
  - should we try to implement multi-step services? the first request could enqueue another request with the same correlation id, which would then send the finished result to the waiting service client
-
+ - do we care about message order?
  - do we want messages to be persistent or mandatory?
  - when do we send message acknowledgements
+ - it would be fairly easy for a single client to call multiple services in parallel
 
 
 # Specs
