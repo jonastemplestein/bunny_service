@@ -3,83 +3,108 @@ describe BunnyService::Server do
   let(:exchange_name) { "bunny_service_tests" }
   let(:client) { BunnyService::Client.new(exchange_name: exchange_name) }
 
-  it "can run two servers in one thread" do
+  describe "concurrency" do
 
-    s1 = BunnyService::Server.new(
-      exchange_name: exchange_name,
-      service_name: "s1",
-    ).listen do
-      "big success"
-    end
+    it "can run two servers from one thread" do
 
-    s2 = BunnyService::Server.new(
-      exchange_name: exchange_name,
-      service_name: "s2",
-    ).listen do
-      "big success"
-    end
-
-    expect(client.call("s1")).to eq("big success")
-    expect(client.call("s2")).to eq("big success")
-
-    s1.teardown
-    s2.teardown
-
-  end
-
-  it "can run two servers in one thread that concurrently process requests" do
-
-    counter = block_until_thread_count(2)
-
-    s1 = BunnyService::Server.new(
-      exchange_name: exchange_name,
-      service_name: "concurrent_1",
-    ).listen(&counter)
-
-    s2 = BunnyService::Server.new(
-      exchange_name: exchange_name,
-      service_name: "concurrent_2",
-    ).listen(&counter)
-
-    Timeout::timeout(4) do
-      pid = fork do
-        #client = BunnyService::Client.new(exchange_name: exchange_name)
-        client.call("concurrent_1")
+      s1 = BunnyService::Server.new(
+        exchange_name: exchange_name,
+        service_name: "test.concurrency.service1",
+      ).listen do
+        "big success"
       end
 
-      #client = BunnyService::Client.new(exchange_name: exchange_name)
-      expect(client.call("concurrent_2")).to eq("success")
-
-      # TODO tear down s1 and s2
-      at_exit do
-        Process.kill(9, pid)
+      s2 = BunnyService::Server.new(
+        exchange_name: exchange_name,
+        service_name: "test.concurrency.service2",
+      ).listen do
+        "big success"
       end
+
+      expect(client.call("test.concurrency.service1")).to eq("big success")
+      expect(client.call("test.concurrency.service2")).to eq("big success")
+
+      s1.teardown
+      s2.teardown
+
     end
-  end
 
-  it "can concurrently process requests" do
+    it "can run two servers in one thread that concurrently process requests" do
 
-    s = BunnyService::Server.new(
-      exchange_name: exchange_name,
-      service_name: "test_service",
-    ).listen &block_until_thread_count(2)
+      counter = block_until_thread_count(2)
 
-    Timeout::timeout(5) do
+      s1 = BunnyService::Server.new(
+        exchange_name: exchange_name,
+        service_name: "test.concurrency.service3",
+      ).listen(&counter)
 
-      pid = fork do
+      s2 = BunnyService::Server.new(
+        exchange_name: exchange_name,
+        service_name: "test.concurrency.service4",
+      ).listen(&counter)
+
+      Timeout::timeout(4) do
+        child = Thread.fork do
+          client = BunnyService::Client.new(exchange_name: exchange_name)
+          client.call("test.concurrency.service3")
+        end
+
         client = BunnyService::Client.new(exchange_name: exchange_name)
-        client.call("test_service")
+        expect(client.call("test.concurrency.service4")).to eq("success")
+
+        at_exit do
+          Thread.kill(child)
+          s1.teardown
+          s2.teardown
+        end
       end
+    end
 
-      client = BunnyService::Client.new(exchange_name: exchange_name)
-      client.call("test_service")
+    it "can concurrently process requests" do
 
-      at_exit do
-        Process.kill(9, pid)
-        s.teardown # TODO this won't run on exception
+      s = BunnyService::Server.new(
+        exchange_name: exchange_name,
+        service_name: "test.concurrency.parallel",
+      ).listen &block_until_thread_count(2)
+
+      Timeout::timeout(5) do
+
+        child = Thread.fork do
+          client = BunnyService::Client.new(exchange_name: exchange_name)
+          client.call("test.concurrency.parallel")
+        end
+
+        client = BunnyService::Client.new(exchange_name: exchange_name)
+        client.call("test.concurrency.parallel")
+
+        at_exit do
+          Thread.kill(child)
+          s.teardown # TODO this won't run on exception
+        end
       end
     end
   end
 
-  # TODO specs for a bunch of other crap
+  describe "error handling" do
+    context "when the server throws an exception" do
+
+      before do
+        BunnyService::Server.new(
+          service_name: "test.exception1",
+          exchange_name: exchange_name,
+        ).listen do |payload|
+          raise "pow"
+          {blub: "true"}
+        end
+      end
+
+      it "returns the exception" do
+        Timeout::timeout(5) do
+          expect(client.call("test.exception1")).to eq({
+            "error" => "pow"
+          })
+        end
+      end
+    end
+  end
 end

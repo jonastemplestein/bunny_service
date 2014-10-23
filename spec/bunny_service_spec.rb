@@ -13,7 +13,7 @@ RSpec.describe "RPC over AMQP" do
     )
   }
 
-  let(:exchange_name) { "rpc_test" }
+  let(:exchange_name) { "bunny_service_tests" }
   let(:service_name) { "test.hello_world" }
 
   let(:params) {
