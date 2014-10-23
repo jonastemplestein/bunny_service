@@ -21,8 +21,10 @@ describe BunnyService::Server do
         "big success"
       end
 
-      expect(client.call("test.concurrency.service1")).to eq("big success")
-      expect(client.call("test.concurrency.service2")).to eq("big success")
+      expect(client.call("test.concurrency.service1").body).
+        to eq("big success")
+      expect(client.call("test.concurrency.service2").body).
+        to eq("big success")
 
       s1.teardown
       s2.teardown
@@ -50,7 +52,8 @@ describe BunnyService::Server do
         end
 
         client = BunnyService::Client.new(exchange_name: exchange_name)
-        expect(client.call("test.concurrency.service4")).to eq("success")
+        expect(client.call("test.concurrency.service4").body).
+          to eq("success")
 
         at_exit do
           Thread.kill(child)
@@ -75,7 +78,8 @@ describe BunnyService::Server do
         end
 
         client = BunnyService::Client.new(exchange_name: exchange_name)
-        client.call("test.concurrency.parallel")
+        expect(client.call("test.concurrency.parallel").body).
+          to eq("success")
 
         at_exit do
           Thread.kill(child)
@@ -92,16 +96,15 @@ describe BunnyService::Server do
         BunnyService::Server.new(
           service_name: "test.exception1",
           exchange_name: exchange_name,
-        ).listen do |payload|
+        ).listen do |request, response|
           raise "pow"
-          {blub: "true"}
         end
       end
 
       it "returns the exception" do
         Timeout::timeout(5) do
-          expect(client.call("test.exception1")).to eq({
-            "error" => "pow"
+          expect(client.call("test.exception1").body).to eq({
+            "error_message" => "pow"
           })
         end
       end

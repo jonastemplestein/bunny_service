@@ -26,7 +26,10 @@ module BunnyService
         # reponse to the currently in-flight request, we store the result and
         # signal the main thread.
         if properties.correlation_id == request_id
-          self.response = payload
+          self.response = Response.new(
+            body: BunnyService::Util.deserialize(payload),
+            headers: properties.headers,
+          )
           lock.synchronize { condition.signal }
         else
           # TODO once we implement timeouts, this might happen frequently
@@ -40,7 +43,7 @@ module BunnyService
 
     # Publishes a service request on the exchange. For example:
     # service_client.call("lazy.sleep", {duration: 5})
-    def call(service_name, payload={})
+    def call(service_name, payload={}, headers={})
       raise "Payload has to be a Hash" unless payload.is_a?(Hash)
 
       self.request_id = BunnyService::Util.generate_uuid
@@ -51,6 +54,7 @@ module BunnyService
         payload,
         persistent: false,
         mandatory: false,
+        headers: headers,
         routing_key: service_name,
         correlation_id: request_id,
         reply_to: reply_queue.name)
@@ -61,13 +65,12 @@ module BunnyService
       # TODO what about a timeout?
       lock.synchronize { condition.wait(lock) }
 
-      log "[#{request_id}] Got response: #{response}"
-      deserialized_response = BunnyService::Util.deserialize(response)
+      log "[#{request_id}] Got response: #{response.body.inspect}"
 
-      self.request_id = nil
-      self.response = nil
-
-      deserialized_response
+      response.tap {
+        self.response = nil
+        self.request_id = nil
+      }
     end
 
     def reply_queue

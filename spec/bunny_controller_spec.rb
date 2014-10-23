@@ -25,8 +25,10 @@ RSpec.describe BunnyService::Controller do
         pid = fork { TestController.listen(exchange_name: exchange_name) }
         at_exit { Process.kill(9, pid) }
 
-        expect(client.call('test.foo', thing: 'baz')).to eq "result" => "foo got baz"
-        expect(client.call('test.bar', thing: 'qux')).to eq "result" => "bar got qux"
+        expect(client.call('test.foo', thing: 'baz').body).
+          to eq "result" => "foo got baz"
+        expect(client.call('test.bar', thing: 'qux').body).
+          to eq "result" => "bar got qux"
       end
     end
   end

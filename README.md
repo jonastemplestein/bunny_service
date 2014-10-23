@@ -26,9 +26,13 @@ sleep_service = BunnyService::Server.new(
 )
 
 # Asynchronously listens for calls to lazy.sleep
-sleep_service.listen do |payload|
+sleep_service.listen do |request, response|
   sleep(payload["duration"].to_i)
-  {message: "Slept for #{payload["duration"]} seconds"}  
+  response.body = {
+    message: "Slept for #{payload["duration"]} seconds"
+  }  
+  response.status = 200
+  # if you don't set response.body, the listener's return value is used
 end
 
 ```
@@ -44,8 +48,7 @@ client = BunnyService::Client.new(
 
 # Synchronously calls lazy.sleep service on the 'example' exchange.
 # Should return {message: "Slept for 5 seconds"}
-client.call("lazy.sleep", {duration: 5})
-
+response = client.call("lazy.sleep", {duration: 5})
 ```
 
 # Design
@@ -55,8 +58,6 @@ client.call("lazy.sleep", {duration: 5})
 `client.call(service_name, payload)` sends a message to the exchange using `service_name` as the routing key and JSON-encoded payload as the body. For example,  `client.call("test_service.sleep", {duration: "5"})` will send a message with routing key "test_service.sleep" and body {"duration":"5"}. It then blocks and waits for a response message on from the exclusive queue that was set up upon initialization.
 
 Some more notes:
-
-  - `payload` in `service_client.call(service_name, payload)` and the response should be hashes
 
   - You have to run the `BunnyService::Server` before you can call the service from clients. RabbitMQ discards messages with no matching bindings and `BunnyService::Server` sets up the bindings and queues 
 
@@ -114,6 +115,7 @@ The bunny docs are very well written and worth reading: http://rubybunny.info/ar
  - Catch exceptions in consumer thread on client side
 
 # Specs
+
 Run `guard` (`bundle exec rspec` depending on your setup).
 
 Run `guard` to continuously run specs.
