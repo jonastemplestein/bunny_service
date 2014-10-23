@@ -1,7 +1,9 @@
 describe BunnyService::Server do
 
   let(:exchange_name) { "bunny_service_tests" }
-  let(:client) { BunnyService::Client.new(exchange_name: exchange_name) }
+  let(:client) { BunnyService::Client.new(
+    rabbit_url: ENV["RABBIT_URL"],
+    exchange_name: exchange_name) }
 
   describe "concurrency" do
 
@@ -9,6 +11,7 @@ describe BunnyService::Server do
 
       s1 = BunnyService::Server.new(
         exchange_name: exchange_name,
+        rabbit_url: ENV["RABBIT_URL"],
         service_name: "test.concurrency.service1",
       ).listen do
         "big success"
@@ -16,6 +19,7 @@ describe BunnyService::Server do
 
       s2 = BunnyService::Server.new(
         exchange_name: exchange_name,
+        rabbit_url: ENV["RABBIT_URL"],
         service_name: "test.concurrency.service2",
       ).listen do
         "big success"
@@ -36,22 +40,30 @@ describe BunnyService::Server do
       counter = block_until_thread_count(2)
 
       s1 = BunnyService::Server.new(
+        rabbit_url: ENV["RABBIT_URL"],
         exchange_name: exchange_name,
         service_name: "test.concurrency.service3",
       ).listen(&counter)
 
       s2 = BunnyService::Server.new(
         exchange_name: exchange_name,
+        rabbit_url: ENV["RABBIT_URL"],
         service_name: "test.concurrency.service4",
       ).listen(&counter)
 
       Timeout::timeout(4) do
         child = Thread.fork do
-          client = BunnyService::Client.new(exchange_name: exchange_name)
+          client = BunnyService::Client.new(
+            rabbit_url: ENV["RABBIT_URL"],
+            exchange_name: exchange_name,
+          )
           client.call("test.concurrency.service3")
         end
 
-        client = BunnyService::Client.new(exchange_name: exchange_name)
+        client = BunnyService::Client.new(
+          exchange_name: exchange_name,
+          rabbit_url: ENV["RABBIT_URL"],
+        )
         expect(client.call("test.concurrency.service4").body).
           to eq("success")
 
@@ -66,6 +78,7 @@ describe BunnyService::Server do
     it "can concurrently process requests" do
 
       s = BunnyService::Server.new(
+        rabbit_url: ENV["RABBIT_URL"],
         exchange_name: exchange_name,
         service_name: "test.concurrency.parallel",
       ).listen &block_until_thread_count(2)
@@ -73,11 +86,17 @@ describe BunnyService::Server do
       Timeout::timeout(5) do
 
         child = Thread.fork do
-          client = BunnyService::Client.new(exchange_name: exchange_name)
+          client = BunnyService::Client.new(
+            rabbit_url: ENV["RABBIT_URL"],
+            exchange_name: exchange_name,
+          )
           client.call("test.concurrency.parallel")
         end
 
-        client = BunnyService::Client.new(exchange_name: exchange_name)
+        client = BunnyService::Client.new(
+          rabbit_url: ENV["RABBIT_URL"],
+          exchange_name: exchange_name,
+        )
         expect(client.call("test.concurrency.parallel").body).
           to eq("success")
 
@@ -94,6 +113,7 @@ describe BunnyService::Server do
 
       before do
         BunnyService::Server.new(
+          rabbit_url: ENV["RABBIT_URL"],
           service_name: "test.exception1",
           exchange_name: exchange_name,
         ).listen do |request, response|

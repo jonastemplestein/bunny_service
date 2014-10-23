@@ -17,7 +17,12 @@ end
 
 RSpec.describe BunnyService::Controller do
   let(:exchange_name) { 'bunny_service_tests' }
-  let(:client)        { BunnyService::Client.new(exchange_name: exchange_name) }
+  let(:client)        {
+    BunnyService::Client.new(
+      rabbit_url: ENV["RABBIT_URL"],
+      exchange_name: exchange_name,
+    )
+  }
 
   describe ".listen" do
     it "handles messages for the action bindings on the given exchange" do
