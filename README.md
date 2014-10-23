@@ -57,8 +57,14 @@ client.call("lazy.sleep", {duration: 5})
 Some more notes:
 
   - `payload` in `service_client.call(service_name, payload)` and the response should be hashes
-  - You have to run the `BunnyService::Server` first. RabbitMQ discards messages with no matching bindings and `BunnyService::Server` sets up the bindings and queues 
+
+  - You have to run the `BunnyService::Server` before you can call the service from clients. RabbitMQ discards messages with no matching bindings and `BunnyService::Server` sets up the bindings and queues 
+
   - The RabbitMQ web interface is super useful for debugging services. You should be able to inspect exchanges, queues, bindings, running consumers, waiting messages (you can dequeue and immediately re-enqueue) and even send requests to the services.
+  
+  - Once requests are enqueued, you have to consider them to be executed successfully, even if you don't hear back. There is no way to recall a request after it was sent.
+
+  - Neither the queue, exchange or messages are persistent. If the broker goes down, the service calls would time out anyway
 
 About concurrency:
 
@@ -75,8 +81,9 @@ About concurrency:
 
 http://rubybunny.info/articles/error_handling.html
 
-### Fault tolerance
+### Fault tolerance / failure scenarios
 
+TODO think hard about what all can go wrong.
 
 # Further reading
 
@@ -84,24 +91,27 @@ The bunny docs are very well written and worth reading: http://rubybunny.info/ar
 
 # TODO / open questions
 
- - is there a way to cancel queued-up messages? should there be?
- - why do we have to send the callback messages to an exclusive queue on the _default exchange_?
- - how do we manage our services? queues and bindings need to be set up, perhaps we want to broadcast other service properties such as retry policies, as well
- - handle exceptions properly
- - properly handle logging
- - implement timeouts (currently the client waits forever)
- - retry failed services?
- - make sure specs clean up before/after they run and can't leave garbage lying around that messses with other tests
- - make sure all rabbitmq structures used for specs are torn down after suite
- - make sure the exchange, channel, queue and message properties are set correctly for our use-case
- - implement `ServiceLoader` or similar that takes a plain service object and sets up the necessary BunnyService::Servers etc
- - talk to RabbitMQ using TLS
- - should we try to implement multi-step services? the first request could enqueue another request with the same correlation id, which would then send the finished result to the waiting service client
- - do we care about message order?
- - do we want messages to be persistent or mandatory?
- - when do we send message acknowledgements
- - it would be fairly easy for a single client to call multiple services in parallel
+ - Implement a rich payload format for api-services that encapsulates an actual http request
 
+ - Use protobuf for communication
+
+ - Does it make sense to give services an interface to acknowledge messages manually?
+
+ - How do we manage our services? Queues and bindings need to be set up, perhaps we want to broadcast other service properties such as retry policies, as well
+
+ - Instrument and monitor all service calls
+
+ - Make sure specs clean up before/after they run and can't leave garbage lying around that messses with other tests
+
+ - Implement a deadletter queue that handles errors
+
+ - Talk to RabbitMQ using TLS
+
+ - Use a headers exchange instead of a direct exchange
+
+ - How do we set TTL in RabbitMQ?
+
+ - Catch exceptions in consumer thread on client side
 
 # Specs
 Run `guard` (`bundle exec rspec` depending on your setup).
