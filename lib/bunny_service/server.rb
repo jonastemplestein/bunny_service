@@ -15,40 +15,54 @@ module BunnyService
         logger: Logger.new(STDOUT),
         consumer_pool_size: 2,
       }.merge(options)
+
       log "Initialized service"
     end
 
     def listen(&block)
-
       queue.bind(
         exchange,
         routing_key: options.fetch(:service_name)
       )
 
+      log "Bound queue to exchange"
+
       queue.subscribe do |delivery_info, properties, payload|
+        begin
+          log "Received request #{properties.correlation_id} w/ #{payload}"
 
-        request_id = properties.correlation_id
-        reply_queue = properties.reply_to
-        payload = BunnyService::Util.deserialize(payload)
-
-        log "Received request #{request_id} with payload #{payload.inspect}"
-
-        response = block.call(payload)
-
-        if reply_queue
-          log "Publishing response #{response.inspect} on queue #{reply_queue}"
-
-          channel.default_exchange.publish(
-            BunnyService::Util.serialize(response),
-            routing_key: reply_queue, # default_exchange is a direct exchange
-            correlation_id: request_id,
+          publish_response(
+            response: block.call(BunnyService::Util.deserialize(payload)),
+            reply_queue: properties.reply_to,
+            request_id: properties.correlation_id,
           )
-        else
-          log "Not publishing response #{response.inspect} because there is no reply queue"
+        rescue StandardError => e
+          publish_response(
+            response: { error: e.message },
+            reply_queue: properties.reply_to,
+            request_id: properties.correlation_id,
+          )
         end
       end
+
       log "Subscribed to queue"
       self
+    end
+
+    def publish_response(response:, reply_queue:, request_id:)
+      if reply_queue
+        log "Publishing response #{response.inspect} on queue #{reply_queue}"
+
+        response_exchange.publish(
+          BunnyService::Util.serialize(response),
+          persistent: false,
+          mandatory: false,
+          routing_key: reply_queue,
+          correlation_id: request_id,
+        )
+      else
+        log "Not publishing response #{response.inspect} because there is no reply queue"
+      end
     end
 
     def connection
@@ -65,14 +79,18 @@ module BunnyService
     def exchange
       @exchange ||= channel.direct(
         options.fetch(:exchange_name),
-        durable: true,
+        durable: false,
       )
+    end
+
+    def response_exchange
+      @response_exchange ||= channel.default_exchange
     end
 
     def queue
       @queue ||= channel.queue(
         options.fetch(:service_name),
-        durable: true
+        durable: false,
       )
     end
 

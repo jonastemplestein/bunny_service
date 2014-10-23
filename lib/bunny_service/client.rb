@@ -49,6 +49,8 @@ module BunnyService
 
       exchange.publish(
         payload,
+        persistent: false,
+        mandatory: false,
         routing_key: service_name,
         correlation_id: request_id,
         reply_to: reply_queue.name)
@@ -85,7 +87,7 @@ module BunnyService
     def exchange
       @exchange ||= channel.direct(
         options.fetch(:exchange_name),
-        durable: true,
+        durable: false,
       )
     end
 
