@@ -12,7 +12,7 @@ module BunnyService
       @options = {
         rabbit_url: ENV["RABBIT_URL"],
         exchange_name: "amq.direct",
-        logger: Logger.new(STDOUT),
+        logger: Logger.new(STDERR),
         consumer_pool_size: 2,
       }.merge(options)
 

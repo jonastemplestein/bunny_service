@@ -13,7 +13,7 @@ module BunnyService
     def initialize(options={})
       @rabbit_url = options.fetch(:rabbit_url)
       @exchange_name = options.fetch(:exchange_name)
-      @logger = options[:logger] || Logger.new(STDOUT)
+      @logger = options[:logger] || Logger.new(STDERR)
     end
 
     def subscribe_to_reply_queue
