@@ -10,6 +10,9 @@ RSpec.configure do |config|
     # TODO clean up rabbitmq structures
   end
 
+  config.after(:all) do
+  end
+
   config.before(:each) do
     # TODO clean up rabbitmq structures
   end

@@ -31,14 +31,25 @@ module BunnyService
         begin
           log "Received request #{properties.correlation_id} w/ #{payload}"
 
+          response = ResponseWriter.new
+          return_value = block.call(
+            Request.new(
+              params: BunnyService::Util.deserialize(payload),
+              rabbitmq_properties: properties,
+              rabbitmq_delivery_info: delivery_info,
+            ),
+            response,
+          )
+          response.body = return_value if response.body.nil?
           publish_response(
-            response: block.call(BunnyService::Util.deserialize(payload)),
+            response: response,
             reply_queue: properties.reply_to,
             request_id: properties.correlation_id,
           )
         rescue StandardError => e
+          response.respond_with_exception e
           publish_response(
-            response: { error: e.message },
+            response: response,
             reply_queue: properties.reply_to,
             request_id: properties.correlation_id,
           )
@@ -51,10 +62,11 @@ module BunnyService
 
     def publish_response(response:, reply_queue:, request_id:)
       if reply_queue
-        log "Publishing response #{response.inspect} on queue #{reply_queue}"
+        log "Publishing response on queue #{reply_queue}"
 
         response_exchange.publish(
-          BunnyService::Util.serialize(response),
+          BunnyService::Util.serialize(response.body),
+          headers: response.headers,
           persistent: false,
           mandatory: false,
           routing_key: reply_queue,

@@ -2,6 +2,7 @@ RSpec.describe "RPC over AMQP" do
 
   let(:server) {
     BunnyService::Server.new(
+      rabbit_url: ENV["RABBIT_URL"],
       exchange_name: exchange_name,
       service_name: service_name,
     )
@@ -9,6 +10,7 @@ RSpec.describe "RPC over AMQP" do
 
   let(:client) {
     BunnyService::Client.new(
+      rabbit_url: ENV["RABBIT_URL"],
       exchange_name: exchange_name,
     )
   }
@@ -31,23 +33,23 @@ RSpec.describe "RPC over AMQP" do
 
 
   before do
-    server.listen do |params|
-      name = params.fetch("name")
+    server.listen do |request, response|
+      name = request.params.fetch("name")
       { message: "Hi #{name}" }
     end
   end
 
   it "calls the service and returns the result" do
     response = client.call(service_name, params)
-    expect(response).to eq(response_message)
+    expect(response.body).to eq(response_message)
   end
 
   context "single client calls single service twice sequentially" do
     it "calls the service and returns the result" do
       response = client.call(service_name, params)
-      expect(response).to eq(response_message)
+      expect(response.body).to eq(response_message)
       response = client.call(service_name, {name: "peter"})
-      expect(response).to eq({"message" => "Hi peter"})
+      expect(response.body).to eq({"message" => "Hi peter"})
     end
   end
 

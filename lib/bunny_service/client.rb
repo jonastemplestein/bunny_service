@@ -5,28 +5,30 @@ require "json"
 module BunnyService
   class Client
 
-    attr_reader :options
+    attr_reader :rabbit_url, :exchange_name, :logger
 
     # Used to pass data between main thread and networking thread
     attr_accessor :response, :request_id
 
     def initialize(options={})
-      @options = {
-        rabbit_url: ENV["RABBIT_URL"],
-        exchange_name: "amq.direct",
-        logger: Logger.new(STDOUT),
-      }.merge(options)
+      @rabbit_url = options.fetch(:rabbit_url)
+      @exchange_name = options.fetch(:exchange_name)
+      @logger = options[:logger] || Logger.new(STDOUT)
+    end
 
-      log "Initializing client"
-
+    def subscribe_to_reply_queue
+      # TODO test that multiple #call calls don't create multiple subscriptions
       # Each client creates one exclusive queue for responses. At each time,
       # just one call can be in-flight per client.
-      reply_queue.subscribe do |delivery_info, properties, payload|
+      @reply_subscription ||= reply_queue.subscribe do |delivery_info, properties, payload|
         # This code is executed in the networking thread. If this is a
         # reponse to the currently in-flight request, we store the result and
         # signal the main thread.
         if properties.correlation_id == request_id
-          self.response = payload
+          self.response = Response.new(
+            body: BunnyService::Util.deserialize(payload),
+            headers: properties.headers,
+          )
           lock.synchronize { condition.signal }
         else
           # TODO once we implement timeouts, this might happen frequently
@@ -34,23 +36,27 @@ module BunnyService
             "on queue #{reply_queue.name} (expecting #{request_id})"
         end
       end
-
       log "Subscribed to exclusive queue #{reply_queue.name}"
+      nil
     end
 
     # Publishes a service request on the exchange. For example:
     # service_client.call("lazy.sleep", {duration: 5})
-    def call(service_name, payload={})
-      raise "Payload has to be a Hash" unless payload.is_a?(Hash)
+    def call(service_name, params={}, headers={})
+
+      subscribe_to_reply_queue
+
+      raise "Payload has to be a Hash" unless params.is_a?(Hash)
 
       self.request_id = BunnyService::Util.generate_uuid
-      payload = BunnyService::Util.serialize(payload)
+      payload = BunnyService::Util.serialize(params)
       log "[#{request_id}] Calling #{service_name} w/ #{payload})"
 
       exchange.publish(
         payload,
         persistent: false,
         mandatory: false,
+        headers: headers,
         routing_key: service_name,
         correlation_id: request_id,
         reply_to: reply_queue.name)
@@ -61,13 +67,12 @@ module BunnyService
       # TODO what about a timeout?
       lock.synchronize { condition.wait(lock) }
 
-      log "[#{request_id}] Got response: #{response}"
-      deserialized_response = BunnyService::Util.deserialize(response)
+      log "[#{request_id}] Got response: #{response.body.inspect}"
 
-      self.request_id = nil
-      self.response = nil
-
-      deserialized_response
+      response.tap {
+        self.response = nil
+        self.request_id = nil
+      }
     end
 
     def reply_queue
@@ -77,7 +82,7 @@ module BunnyService
     end
 
     def connection
-      @connection ||= Bunny.new(options.fetch(:rabbit_url)).start
+      @connection ||= Bunny.new(rabbit_url).start
     end
 
     def channel
@@ -86,7 +91,7 @@ module BunnyService
 
     def exchange
       @exchange ||= channel.direct(
-        options.fetch(:exchange_name),
+        exchange_name,
         durable: false,
       )
     end
@@ -107,7 +112,7 @@ module BunnyService
     private
 
     def log(message, severity=Logger::INFO)
-      options.fetch(:logger).add(severity) {
+      logger.add(severity) {
         "[client #{self.object_id}] #{message}"
       }
     end

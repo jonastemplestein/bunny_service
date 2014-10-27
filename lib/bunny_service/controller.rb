@@ -7,8 +7,8 @@ module BunnyService
         BunnyService::Server.new(
           exchange_name: exchange_name,
           service_name: service_name,
-        ).listen do |params, response, request|
-          new(params: params, response: response, request: request)
+        ).listen do |request, response|
+          new(request: request, response: response)
             .public_send(action_name)
         end
       end
@@ -17,8 +17,16 @@ module BunnyService
       servers.each(&:teardown)
     end
 
-    def initialize(params:, response:, request:)
-      @params, @response, @request = params, response, request
+    def initialize(request:, response:)
+      @request, @response = request, response
+    end
+
+    def params
+      request.params
+    end
+
+    def respond_with(*args)
+      response.respond_with(*args)
     end
 
     private
@@ -27,6 +35,7 @@ module BunnyService
       @action_bindings = bindings
     end
 
-    attr_reader :params, :response, :request
+    attr_reader :request, :response
+
   end
 end
