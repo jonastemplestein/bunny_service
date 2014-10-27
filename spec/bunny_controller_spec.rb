@@ -1,21 +1,22 @@
 require 'spec_helper'
 
-class TestController < BunnyService::Controller
-  action_bindings(
-    foo: 'test.foo',
-    bar: 'test.bar',
-  )
-
-  def foo
-    { result: "foo got #{params.fetch('thing')}" }
-  end
-
-  def bar
-    { result: "bar got #{params.fetch('thing')}" }
-  end
-end
-
 RSpec.describe BunnyService::Controller do
+
+  class TestController < BunnyService::Controller
+    action_bindings(
+      foo: 'test.foo',
+      bar: 'test.bar',
+    )
+
+    def foo
+      { result: "foo got #{params.fetch('thing')}" }
+    end
+
+    def bar
+      { result: "bar got #{params.fetch('thing')}" }
+    end
+  end
+
   let(:exchange_name) { 'bunny_service_tests' }
   let(:client)        {
     BunnyService::Client.new(
