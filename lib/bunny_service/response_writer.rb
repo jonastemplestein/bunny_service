@@ -25,7 +25,7 @@ module BunnyService
         headers.merge(options[:headers])
       end
 
-      self.status = options[:status].present? ? options[:status] : 200
+      self.status = options[:status].nil? ? 200 : options[:status]
       self
     end
   end
