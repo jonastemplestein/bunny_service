@@ -12,7 +12,7 @@ module BunnyService
       @options = {
         rabbit_url: ENV["RABBIT_URL"],
         exchange_name: "amq.direct",
-        logger: Logger.new(STDOUT),
+        logger: Logger.new(STDERR),
         consumer_pool_size: 2,
       }.merge(options)
 
@@ -47,6 +47,7 @@ module BunnyService
             request_id: properties.correlation_id,
           )
         rescue StandardError => e
+          log "ERROR: #{e.message} \n#{e.backtrace.join("\n")}", Logger::ERROR
           response.respond_with_exception e
           publish_response(
             response: response,
