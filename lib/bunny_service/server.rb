@@ -47,6 +47,7 @@ module BunnyService
             request_id: properties.correlation_id,
           )
         rescue StandardError => e
+          log "ERROR: #{e.message} \n#{e.backtrace.join("\n")}", Logger::ERROR
           response.respond_with_exception e
           publish_response(
             response: response,
