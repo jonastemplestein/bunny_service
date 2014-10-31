@@ -20,7 +20,7 @@ module BunnyService
     end
 
     def error_message
-      success? ? nil : body["error_message"] # TODO symbols vs strings
+      success? ? nil : body["error_message"]
     end
 
     def status

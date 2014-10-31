@@ -10,8 +10,9 @@ module BunnyService
 
     def respond_with_exception(e, status=500)
       self.body = {
-        "error_message" => e.message
+        "error_message" => e.respond_to?(:message) ? e.message : e.to_s
       }
+      self.status = status
     end
 
     def respond_with(body, options={})
