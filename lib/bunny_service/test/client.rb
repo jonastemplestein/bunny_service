@@ -7,6 +7,7 @@ module BunnyService
 
       attr_reader :calls
 
+      # TODO allow stub for specific params
       def stub(service_name, &block)
         stubs[service_name] = block
       end
@@ -17,7 +18,9 @@ module BunnyService
           params: params,
           headers: headers
         )
-        stubs[service_name].call
+        if stubs[service_name]
+          stubs[service_name].call
+        end
       end
 
       def reset!
