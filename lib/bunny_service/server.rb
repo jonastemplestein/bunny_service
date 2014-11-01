@@ -19,7 +19,7 @@ module BunnyService
       log "Initialized service"
     end
 
-    def listen(&block)
+    def listen(retry: true, &block)
       queue.bind(
         exchange,
         routing_key: options.fetch(:service_name)
@@ -59,6 +59,11 @@ module BunnyService
 
       log "Subscribed to queue"
       self
+    rescue Bunny::TCPConnectionFailedForAllHosts
+      # TODO: back off and/or give up after n retries?
+      log "Could not connect to RMQ host. Retrying in 1 second", Logger::ERROR
+      sleep 1
+      listen(&block)
     end
 
     def publish_response(response:, reply_queue:, request_id:)
