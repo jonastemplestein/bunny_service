@@ -24,16 +24,18 @@ module BunnyService
         # This code is executed in the networking thread. If this is a
         # reponse to the currently in-flight request, we store the result and
         # signal the main thread.
-        if properties.correlation_id == request_id
-          self.response = Response.new(
-            body: BunnyService::Util.deserialize(payload),
-            headers: properties.headers,
-          )
-          lock.synchronize { condition.signal }
-        else
-          # TODO once we implement timeouts, this might happen frequently
-          raise "Received errand correlation id #{properties.correlation_id}" +
-            "on queue #{reply_queue.name} (expecting #{request_id})"
+        lock.synchronize do
+          if properties.correlation_id == request_id
+            self.response = Response.new(
+              body: BunnyService::Util.deserialize(payload),
+              headers: properties.headers,
+            )
+            # signal the main thread
+            condition.signal
+          else
+            log "Received response for timed out request " +
+              "#{properties.correlation_id} on queue #{reply_queue.name}"
+          end
         end
       end
       log "Subscribed to exclusive queue #{reply_queue.name}"
@@ -42,7 +44,12 @@ module BunnyService
 
     # Publishes a service request on the exchange. For example:
     # service_client.call("lazy.sleep", {duration: 5})
-    def call(service_name, params={}, headers={})
+    def call(service_name, params={}, options={})
+
+      options = {
+        timeout: 2, # in s. set to nil to wait indefinitely
+        headers: {},
+      }.merge(options)
 
       subscribe_to_reply_queue
 
@@ -56,7 +63,7 @@ module BunnyService
         payload,
         persistent: false,
         mandatory: false,
-        headers: headers,
+        headers: options[:headers],
         routing_key: service_name,
         correlation_id: request_id,
         reply_to: reply_queue.name)
@@ -64,15 +71,25 @@ module BunnyService
       # The response will be asynchronously received in bunny's networking
       # thread. In the main thread we wait for the networking thread to
       # signal that the response was received
-      # TODO what about a timeout?
-      lock.synchronize { condition.wait(lock) }
+      lock.synchronize do
+        condition.wait(lock, options[:timeout])
 
-      log "[#{request_id}] Got response: #{response.body.inspect}"
+        # if there's no response at this point, the call must have
+        # timed out
+        if response.nil?
+          self.response = ResponseWriter.new.respond_with(
+            {error_message: "Call to #{service_name} timed out"},
+            status: 504,
+          )
+        end
 
-      response.tap {
-        self.response = nil
-        self.request_id = nil
-      }
+        log "[#{request_id}] Got response: #{response.body.inspect}"
+
+        response.tap {
+          self.response = nil
+          self.request_id = nil
+        }
+      end
     end
 
     def reply_queue

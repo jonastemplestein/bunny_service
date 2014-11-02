@@ -13,6 +13,7 @@ module BunnyService
         "error_message" => e.respond_to?(:message) ? e.message : e.to_s
       }
       self.status = status
+      self
     end
 
     def respond_with(body, options={})

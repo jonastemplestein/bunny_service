@@ -1,4 +1,6 @@
 require "bunny_service"
+require "dotenv"
+Dotenv.load
 
 require_relative "helpers/concurrency_helper"
 
